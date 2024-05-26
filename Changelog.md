@@ -3,6 +3,48 @@
 Changelog [format](http://keepachangelog.com/en/1.0.0/)
 
 
+## Alcantara Bridge 3.11.1
+
+### Fixed
+* BRIDGE-70: Hotfix for blocked smtp/imap port causing bridge to quit.
+
+
+## Alcantara Bridge 3.11.0
+
+### Added
+* GODT-3185: Report cases which leads to wrong address key used.
+
+### Changed
+* BRIDGE-14: HV3 implementation.
+* BRIDGE-15: Certificate install is now also done during Outlook setup on macOS.
+* GODT-3146: Start servers on startup, keep running even when no users are active.
+* BRIDGE-19: Update checksum validation use warning instead of error on non-existing files.
+
+### Fixed
+* BRIDGE-8: Fix bridge double sessionID issue in logs.
+* BRIDGE-7: Modify keychain test on macOS.
+* BRIDGE-4: Logs not being created when invalid flag is passed.
+* BRIDGE-5: Add tooltip to tray icon.
+* GODT-3163: Filter MBOX format delimiter.
+
+
+## Zaehringen Bridge 3.10.0
+
+### Added
+* GODT-3199: Add package log field.
+* GODT-3220: Add more test scenarios.
+
+### Changed
+* GODT-3193: Preserve attachment encoding.
+* GODT-3214: Encrypt only with primary key.
+* GODT-2662: Use tart runner for darwin jobs.
+* GODT-1602: Test: run integration tests against black 🖤.
+* GODT-3257: Test: quad9 provider test not working on CI.
+
+### Fixed
+* GODT-3290: Fix test failing because of leap day.
+
+
 ## Ypsilon Bridge 3.9.1
 
 ### Fixed
@@ -41,6 +83,12 @@ Changelog [format](http://keepachangelog.com/en/1.0.0/)
 * GODT-3183: Fix database indices.
 * GODT-3187: Fix numberOfDay computation when changing year and day.
 * GODT-3188: Happy new year.
+
+
+## Xikou Bridge 3.8.2
+
+### Fixed
+* GODT-3235: Update bridge update key.
 
 
 ## Xikou Bridge 3.8.1

@@ -28,7 +28,6 @@ import (
 	"github.com/ProtonMail/go-proton-api"
 	"github.com/ProtonMail/gopenpgp/v2/crypto"
 	"github.com/ProtonMail/proton-bridge/v3/internal/bridge"
-	"github.com/ProtonMail/proton-bridge/v3/internal/events"
 	"github.com/ProtonMail/proton-bridge/v3/internal/vault"
 	"github.com/ProtonMail/proton-bridge/v3/pkg/algo"
 	"github.com/bradenaw/juniper/iterator"
@@ -57,7 +56,7 @@ func (s *scenario) theAccountHasAdditionalAddressWithoutKeys(username, address s
 	userID := s.t.getUserByName(username).getUserID()
 
 	// Decrypt the user's encrypted ID for use with quark.
-	userDecID, err := s.t.runQuarkCmd(context.Background(), "encryption:id", "--decrypt", userID)
+	userDecID, err := s.t.decryptID(userID)
 	if err != nil {
 		return err
 	}
@@ -66,6 +65,7 @@ func (s *scenario) theAccountHasAdditionalAddressWithoutKeys(username, address s
 	if _, err := s.t.runQuarkCmd(
 		context.Background(),
 		"user:create:address",
+		"--",
 		string(userDecID),
 		s.t.getUserByID(userID).getUserPass(),
 
@@ -88,7 +88,6 @@ func (s *scenario) theAccountHasAdditionalAddressWithoutKeys(username, address s
 }
 
 func (s *scenario) theAccountNoLongerHasAdditionalAddress(username, address string) error {
-	userID := s.t.getUserByName(username).getUserID()
 	addrID := s.t.getUserByName(username).getAddrID(address)
 
 	if err := s.t.withClient(context.Background(), username, func(ctx context.Context, c *proton.Client) error {
@@ -100,8 +99,6 @@ func (s *scenario) theAccountNoLongerHasAdditionalAddress(username, address stri
 	}); err != nil {
 		return err
 	}
-
-	s.t.getUserByID(userID).remAddress(addrID)
 
 	return nil
 }
@@ -332,27 +329,41 @@ func (s *scenario) drafAtIndexWasMovedToTrashForAddressOfAccount(draftIndex int,
 }
 
 func (s *scenario) userLogsInWithUsernameAndPassword(username, password string) error {
-	smtpEvtCh, cancelSMTP := s.t.bridge.GetEvents(events.SMTPServerReady{})
-	defer cancelSMTP()
-	imapEvtCh, cancelIMAP := s.t.bridge.GetEvents(events.IMAPServerReady{})
-	defer cancelIMAP()
-
 	userID, err := s.t.bridge.LoginFull(context.Background(), username, []byte(password), nil, nil)
 	if err != nil {
 		s.t.pushError(err)
 	} else {
 		// We need to wait for server to be up or we won't be able to connect. It should only happen once to avoid
 		// blocking on multiple Logins.
-		if !s.t.imapServerStarted {
-			<-imapEvtCh
-			s.t.imapServerStarted = true
-		}
-		if !s.t.smtpServerStarted {
-			<-smtpEvtCh
-			s.t.smtpServerStarted = true
-		}
+		s.t.imapServerStarted = true
+		s.t.smtpServerStarted = true
 
 		if userID != s.t.getUserByName(username).getUserID() {
+			return errors.New("user ID mismatch")
+		}
+
+		info, err := s.t.bridge.GetUserInfo(userID)
+		if err != nil {
+			return err
+		}
+
+		s.t.getUserByID(userID).setBridgePass(string(info.BridgePass))
+	}
+
+	return nil
+}
+
+func (s *scenario) userLogsInWithAliasAddressAndPassword(alias, password string) error {
+	userID, err := s.t.bridge.LoginFull(context.Background(), s.t.getUserByAddress(alias).getName(), []byte(password), nil, nil)
+	if err != nil {
+		s.t.pushError(err)
+	} else {
+		// We need to wait for server to be up or we won't be able to connect. It should only happen once to avoid
+		// blocking on multiple Logins.
+		s.t.imapServerStarted = true
+		s.t.smtpServerStarted = true
+
+		if userID != s.t.getUserByAddress(alias).getUserID() {
 			return errors.New("user ID mismatch")
 		}
 
@@ -480,7 +491,7 @@ func (s *scenario) addAdditionalAddressToAccount(username, address string, disab
 	userID := s.t.getUserByName(username).getUserID()
 
 	// Decrypt the user's encrypted ID for use with quark.
-	userDecID, err := s.t.runQuarkCmd(context.Background(), "encryption:id", "--decrypt", userID)
+	userDecID, err := s.t.decryptID(userID)
 	if err != nil {
 		return err
 	}
@@ -494,6 +505,7 @@ func (s *scenario) addAdditionalAddressToAccount(username, address string, disab
 	}
 
 	args = append(args,
+		"--",
 		string(userDecID),
 		s.t.getUserByID(userID).getUserPass(),
 		address,
@@ -524,6 +536,14 @@ func (s *scenario) addAdditionalAddressToAccount(username, address string, disab
 func (s *scenario) createUserAccount(username, password string, disabled bool) error {
 	// Create the user and generate its default address (with keys).
 
+	if len(username) == 0 || username[0] == '-' {
+		panic("username must be non-empty and not start with minus")
+	}
+
+	if len(password) == 0 || password[0] == '-' {
+		panic("password must be non-empty and not start with minus")
+	}
+
 	args := []string{
 		"--name", username,
 		"--password", password,
@@ -549,7 +569,7 @@ func (s *scenario) createUserAccount(username, password string, disabled bool) e
 		}
 
 		// Decrypt the user's encrypted ID for use with quark.
-		userDecID, err := s.t.runQuarkCmd(context.Background(), "encryption:id", "--decrypt", user.ID)
+		userDecID, err := s.t.decryptID(user.ID)
 		if err != nil {
 			return err
 		}
@@ -559,6 +579,7 @@ func (s *scenario) createUserAccount(username, password string, disabled bool) e
 			context.Background(),
 			"user:create:subscription",
 			"--planID", "visionary2022",
+			"--",
 			string(userDecID),
 		); err != nil {
 			return err
